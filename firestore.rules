@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Check if user is authenticated
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper: Get user role from users collection
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuth() && getUserData().role == 'admin';
+    }
+
+    function isApprovedCoordinator() {
+      return isAuth() && getUserData().role == 'coordinator' && getUserData().approved == true;
+    }
+
+    function isAdminOrCoordinator() {
+      return isAdmin() || isApprovedCoordinator();
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own document
+      allow read: if isAuth() && request.auth.uid == userId;
+      // Users can create their own document on signup
+      allow create: if isAuth() && request.auth.uid == userId;
+      // Only admin can update/delete any user
+      allow update, delete: if isAdmin();
+      // Admin can read all users
+      allow read: if isAdmin();
+    }
+
+    // Teams collection
+    match /teams/{teamId} {
+      // Any authenticated & approved user can read teams
+      allow read: if isAdminOrCoordinator();
+      // Public read for QR scan (limited by frontend)
+      allow read: if true;
+      // Admin or approved coordinator can update teams
+      allow update: if isAdminOrCoordinator();
+      // Only admin can create or delete teams
+      allow create, delete: if isAdmin();
+    }
+
+    // Settings collection
+    match /settings/{docId} {
+      // Anyone authenticated can read settings
+      allow read: if isAuth();
+      // Only admin can modify settings
+      allow write: if isAdmin();
+    }
+
+    // Notifications collection
+    match /notifications/{notifId} {
+      // Anyone authenticated can read notifications
+      allow read: if isAuth();
+      // Admin can create notifications
+      allow create: if isAdmin();
+      // Admin can delete
+      allow delete: if isAdmin();
+    }
+  }
+}
