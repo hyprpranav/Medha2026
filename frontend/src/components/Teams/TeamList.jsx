@@ -3,7 +3,7 @@ import { useTeams } from '../../hooks/useTeams';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
 import TeamDetails from './TeamDetails';
-import { Search, Users, Edit3, QrCode, ClipboardCheck } from 'lucide-react';
+import { Search, Users, Edit3, QrCode, ClipboardCheck, SlidersHorizontal } from 'lucide-react';
 import { getStatusColor, getStatusIcon, formatTimestamp, debounce } from '../../utils/helpers';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,6 +12,8 @@ export default function TeamList() {
   const { isAdmin } = useAuth();
   const { settings } = useSettings();
   const [selectedTeam, setSelectedTeam] = useState(null);
+  const [trackFilter, setTrackFilter] = useState('all');
+  const [genderFilter, setGenderFilter] = useState('all');
   const navigate = useNavigate();
 
   const handleSearch = useMemo(() => debounce((val) => setSearchTerm(val), 300), [setSearchTerm]);
@@ -24,28 +26,73 @@ export default function TeamList() {
     { value: 'not-marked', label: '⏳ Not Marked' },
   ];
 
+  const trackFilters = [
+    { value: 'all', label: 'All Tracks' },
+    { value: 'track1', label: 'Track 1: Embedded & IoT' },
+    { value: 'track2', label: 'Track 2: Analytical' },
+  ];
+
+  const genderFilters = [
+    { value: 'all', label: 'All' },
+    { value: 'boys-only', label: '♂ Boys Only' },
+    { value: 'girls-only', label: '♀ Girls Only' },
+    { value: 'mixed', label: '♂♀ Mixed' },
+  ];
+
+  // Apply additional client-side filters for track and gender
+  const filteredTeams = useMemo(() => {
+    let result = teams;
+
+    // Track filter
+    if (trackFilter === 'track1') {
+      result = result.filter((t) => t.track && t.track.toLowerCase().includes('embedded'));
+    } else if (trackFilter === 'track2') {
+      result = result.filter((t) => t.track && t.track.toLowerCase().includes('analytical'));
+    }
+
+    // Gender filter
+    if (genderFilter === 'boys-only') {
+      result = result.filter((t) => (t.girlsCount || 0) === 0 && (t.boysCount || 0) > 0);
+    } else if (genderFilter === 'girls-only') {
+      result = result.filter((t) => (t.boysCount || 0) === 0 && (t.girlsCount || 0) > 0);
+    } else if (genderFilter === 'mixed') {
+      result = result.filter((t) => (t.boysCount || 0) > 0 && (t.girlsCount || 0) > 0);
+    }
+
+    return result;
+  }, [teams, trackFilter, genderFilter]);
+
+  // Compute stats
+  const totalBoys = filteredTeams.reduce((sum, t) => sum + (t.boysCount || 0), 0);
+  const totalGirls = filteredTeams.reduce((sum, t) => sum + (t.girlsCount || 0), 0);
+
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-xl font-bold text-gray-800">Teams</h2>
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <span>{teams.length} teams shown</span>
+        <div className="flex items-center gap-3 text-sm text-gray-500">
+          <span>{filteredTeams.length} teams</span>
+          <span className="text-blue-600 font-medium">♂ {totalBoys}</span>
+          <span className="text-pink-600 font-medium">♀ {totalGirls}</span>
         </div>
       </div>
 
       {/* Search & Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search teams by name..."
-            onChange={(e) => handleSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
-          />
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="Search teams by name..."
+              onChange={(e) => handleSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+            />
+          </div>
         </div>
 
+        {/* Attendance Status Filter */}
         <div className="flex gap-2 overflow-x-auto pb-1">
           {filters.map((f) => (
             <button
@@ -61,6 +108,37 @@ export default function TeamList() {
             </button>
           ))}
         </div>
+
+        {/* Track & Gender Filters */}
+        <div className="flex flex-wrap gap-2">
+          {trackFilters.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setTrackFilter(f.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                trackFilter === f.value
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+          <span className="border-l border-gray-200 mx-1"></span>
+          {genderFilters.map((f) => (
+            <button
+              key={f.value}
+              onClick={() => setGenderFilter(f.value)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition ${
+                genderFilter === f.value
+                  ? 'bg-pink-600 text-white'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Team Table */}
@@ -68,7 +146,7 @@ export default function TeamList() {
         <div className="flex justify-center p-12">
           <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full"></div>
         </div>
-      ) : teams.length === 0 ? (
+      ) : filteredTeams.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
           <Users size={48} className="mx-auto text-gray-300 mb-3" />
           <p className="text-gray-500">No teams found</p>
@@ -80,7 +158,7 @@ export default function TeamList() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-600">#</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-600">ID</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-600">Team Name</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-600 hidden md:table-cell">College</th>
                     <th className="text-left px-4 py-3 font-semibold text-gray-600">Members</th>
@@ -90,13 +168,13 @@ export default function TeamList() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teams.map((team, idx) => (
+                  {filteredTeams.map((team, idx) => (
                     <tr
                       key={team.id}
                       className="border-b border-gray-50 hover:bg-gray-50 transition cursor-pointer"
                       onClick={() => setSelectedTeam(team)}
                     >
-                      <td className="px-4 py-3 text-gray-400">{idx + 1}</td>
+                      <td className="px-4 py-3 text-gray-400 font-mono text-xs">{team.id}</td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-800">{team.teamName}</p>
                         <p className="text-xs text-gray-500">{team.leaderName}</p>

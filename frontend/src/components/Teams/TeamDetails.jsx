@@ -16,6 +16,7 @@ export default function TeamDetails({ team: initialTeam, onClose }) {
   const [editing, setEditing] = useState(false);
   const [showAttendance, setShowAttendance] = useState(false);
   const [formData, setFormData] = useState({
+    teamId: team.id || '',
     teamName: team.teamName || '',
     leaderName: team.leaderName || '',
     leaderEmail: team.leaderEmail || '',
@@ -113,7 +114,10 @@ export default function TeamDetails({ team: initialTeam, onClose }) {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex items-center justify-between rounded-t-2xl z-10">
           <div>
-            <h3 className="text-lg font-bold text-gray-800">{team.teamName}</h3>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-mono rounded">{team.id}</span>
+              <h3 className="text-lg font-bold text-gray-800">{team.teamName}</h3>
+            </div>
             <p className="text-sm text-gray-500">{team.collegeName}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -170,6 +174,19 @@ export default function TeamDetails({ team: initialTeam, onClose }) {
               <p className="text-xs mt-1 font-medium">🔒 Attendance Locked</p>
             )}
           </div>
+
+          {/* Team ID (editable) */}
+          {editing && (
+            <div>
+              <h4 className="font-semibold text-gray-700 mb-2">Team ID</h4>
+              <input
+                value={formData.teamId}
+                onChange={(e) => setFormData({ ...formData, teamId: e.target.value })}
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none w-full"
+                placeholder="Team ID (e.g. MT1-301)"
+              />
+            </div>
+          )}
 
           {/* Team Leader Info */}
           <div>

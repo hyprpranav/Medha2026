@@ -61,6 +61,7 @@ export default function PublicTeamView() {
             <span className="w-5 h-5 bg-white text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">M</span>
             MEDHA 2026
           </div>
+          <p className="text-slate-500 text-xs mb-1">Dept. of ECE, M. Kumarasamy College of Engineering</p>
           <h1 className="text-3xl font-extrabold tracking-tight">{team.teamName}</h1>
           <p className="text-slate-400 mt-1 text-sm">{team.collegeName}</p>
         </div>
@@ -168,7 +169,7 @@ export default function PublicTeamView() {
           </div>
         )}
 
-        <p className="text-center text-slate-600 text-xs mt-8">MEDHA 2026 — Kongunadu College of Engineering & Technology</p>
+        <p className="text-center text-slate-600 text-xs mt-8">MEDHA 2026 — Dept. of ECE, M. Kumarasamy College of Engineering</p>
       </div>
     </div>
   );
