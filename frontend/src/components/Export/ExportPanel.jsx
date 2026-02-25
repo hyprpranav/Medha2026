@@ -4,8 +4,8 @@ import { useSettings } from '../../hooks/useSettings';
 import { useTeams } from '../../hooks/useTeams';
 import { exportCSV } from '../../utils/exportCSV';
 import { exportXML } from '../../utils/exportXML';
-import { exportExcelAdmin, exportExcelCoordinator } from '../../utils/exportExcel';
-import { Download, FileText, FileSpreadsheet, FileCode } from 'lucide-react';
+import { exportExcelAdmin, exportExcelCoordinator, exportCertificateSheet } from '../../utils/exportExcel';
+import { Download, FileText, FileSpreadsheet, FileCode, Award } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function ExportPanel() {
@@ -14,6 +14,7 @@ export default function ExportPanel() {
   const { getAllTeams } = useTeams();
   const [exporting, setExporting] = useState(false);
   const [selectedSession, setSelectedSession] = useState('All');
+  const [exportingCert, setExportingCert] = useState(false);
 
   const sessions = ['All', ...(settings?.sessions || ['Morning', 'Afternoon', 'Final'])];
 
@@ -84,6 +85,30 @@ export default function ExportPanel() {
     }
   };
 
+  const handleCertificateExport = async () => {
+    setExportingCert(true);
+    try {
+      const allTeams = await getAllTeams();
+      // Include all teams that were marked present in selected session (or all if 'All')
+      const teams = allTeams.filter((t) => {
+        if (selectedSession !== 'All' && t.attendanceRound !== selectedSession) return false;
+        return true; // include all teams regardless of status
+      });
+      if (teams.length === 0) {
+        toast.error('No teams found for export');
+        return;
+      }
+      const timestamp = new Date().toISOString().slice(0, 10);
+      exportCertificateSheet(teams, `medha_certificates_${timestamp}.xlsx`);
+      toast.success(`Certificate sheet exported (${teams.length} teams)`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Certificate export failed');
+    } finally {
+      setExportingCert(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-gray-800">Export Data</h2>
@@ -109,7 +134,7 @@ export default function ExportPanel() {
       </div>
 
       {/* Export Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* CSV */}
         <div className="bg-white rounded-xl border border-gray-100 p-6 text-center">
           <div className="w-14 h-14 bg-green-50 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -161,6 +186,24 @@ export default function ExportPanel() {
             className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition disabled:opacity-50"
           >
             <Download size={16} className="inline mr-1" /> Download Excel
+          </button>
+        </div>
+
+        {/* Certificate Sheet */}
+        <div className="bg-white rounded-xl border border-amber-100 p-6 text-center">
+          <div className="w-14 h-14 bg-amber-50 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <Award size={28} className="text-amber-600" />
+          </div>
+          <h3 className="font-semibold text-gray-800 mb-1">Certificate Sheet</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            S.No, Team ID, Team Name, College, Leader &amp; Members
+          </p>
+          <button
+            onClick={handleCertificateExport}
+            disabled={exportingCert}
+            className="w-full py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition disabled:opacity-50"
+          >
+            <Download size={16} className="inline mr-1" /> Download Certificates
           </button>
         </div>
       </div>

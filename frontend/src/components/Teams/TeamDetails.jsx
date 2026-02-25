@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTeams } from '../../hooks/useTeams';
-import { X, Save, Trash2, UserPlus, ArrowRightLeft } from 'lucide-react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import { X, Save, Trash2, UserPlus, ArrowRightLeft, ClipboardList } from 'lucide-react';
 import { formatTimestamp, getStatusColor, getStatusIcon } from '../../utils/helpers';
+import MemberAttendanceForm from '../Attendance/MemberAttendanceForm';
 import toast from 'react-hot-toast';
 
-export default function TeamDetails({ team, onClose }) {
+export default function TeamDetails({ team: initialTeam, onClose }) {
   const { isAdmin, isCoordinator } = useAuth();
   const { updateTeam, deleteTeam } = useTeams();
 
+  const [team, setTeam] = useState(initialTeam);
   const [editing, setEditing] = useState(false);
+  const [showAttendance, setShowAttendance] = useState(false);
   const [formData, setFormData] = useState({
     teamName: team.teamName || '',
     leaderName: team.leaderName || '',
@@ -91,6 +96,17 @@ export default function TeamDetails({ team, onClose }) {
     }
   };
 
+  const refreshTeam = async () => {
+    try {
+      const snap = await getDoc(doc(db, 'teams', team.id));
+      if (snap.exists()) {
+        setTeam({ id: snap.id, ...snap.data() });
+      }
+    } catch (err) {
+      console.error('Failed to refresh team:', err);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
@@ -101,6 +117,14 @@ export default function TeamDetails({ team, onClose }) {
             <p className="text-sm text-gray-500">{team.collegeName}</p>
           </div>
           <div className="flex items-center gap-2">
+            {!editing && (isAdmin || isCoordinator) && (
+              <button
+                onClick={() => setShowAttendance(true)}
+                className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition flex items-center gap-1"
+              >
+                <ClipboardList size={14} /> Attendance
+              </button>
+            )}
             {!editing && (
               <button
                 onClick={() => setEditing(true)}
@@ -292,6 +316,33 @@ export default function TeamDetails({ team, onClose }) {
             </div>
           )}
         </div>
+
+        {/* Attendance Overlay Modal */}
+        {showAttendance && (
+          <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl">
+              <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex items-center justify-between rounded-t-2xl z-10">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-800">Mark Attendance</h3>
+                  <p className="text-sm text-gray-500">{team.teamName}</p>
+                </div>
+                <button
+                  onClick={() => setShowAttendance(false)}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-4">
+                <MemberAttendanceForm
+                  team={team}
+                  onSuccess={() => { refreshTeam(); setShowAttendance(false); }}
+                  onUnlock={refreshTeam}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

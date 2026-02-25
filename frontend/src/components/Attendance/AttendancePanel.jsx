@@ -1,163 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
 import { useTeams } from '../../hooks/useTeams';
-import { doc, updateDoc, arrayUnion, serverTimestamp, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { calculateStatus, getStatusColor, getStatusIcon, formatTimestamp } from '../../utils/helpers';
-import { Search, AlertTriangle, Lock, Unlock } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { getStatusColor, getStatusIcon } from '../../utils/helpers';
+import { Search, Lock } from 'lucide-react';
+import MemberAttendanceForm from './MemberAttendanceForm';
 
 export default function AttendancePanel() {
-  const { user, userData, isAdmin } = useAuth();
   const { settings } = useSettings();
-  const { teams, searchTerm, setSearchTerm, filter, setFilter } = useTeams();
+  const { teams, setSearchTerm } = useTeams();
   const [searchParams] = useSearchParams();
   const [selectedTeam, setSelectedTeam] = useState(null);
-  const [presentCount, setPresentCount] = useState(0);
-  const [confirming, setConfirming] = useState(false);
-  const [teamData, setTeamData] = useState(null);
 
   // If teamId is in URL, auto-select that team
   useEffect(() => {
     const teamId = searchParams.get('team');
-    if (teamId) {
-      loadTeam(teamId);
-    }
+    if (teamId) loadTeam(teamId);
   }, [searchParams]);
 
   const loadTeam = async (teamId) => {
     const snap = await getDoc(doc(db, 'teams', teamId));
     if (snap.exists()) {
-      const data = { id: snap.id, ...snap.data() };
-      setSelectedTeam(data);
-      setTeamData(data);
-      setPresentCount(data.presentCount || 0);
+      setSelectedTeam({ id: snap.id, ...snap.data() });
     }
   };
 
-  const selectTeam = (team) => {
-    setSelectedTeam(team);
-    setTeamData(team);
-    setPresentCount(team.presentCount || 0);
-  };
+  const selectTeam = (team) => setSelectedTeam(team);
 
-  const handleConfirmAttendance = async () => {
-    if (!selectedTeam) return;
-
-    // Check if attendance window is enabled
-    if (!settings?.attendanceEnabled && !isAdmin) {
-      toast.error('Attendance window is closed. Contact admin.');
-      return;
-    }
-
-    // Check for duplicate marking
-    if (selectedTeam.attendanceLocked && !isAdmin) {
-      toast.error(`⚠ Already marked by ${selectedTeam.checkedInByName} at ${formatTimestamp(selectedTeam.checkedInAt)}`);
-      return;
-    }
-
-    setConfirming(true);
-    try {
-      const totalMembers = selectedTeam.totalMembers || 0;
-      const absentCount = totalMembers - presentCount;
-      const status = calculateStatus(presentCount, totalMembers);
-
-      const attendanceRecord = {
-        presentCount,
-        absentCount,
-        attendanceStatus: status,
-        checkedInBy: user.uid,
-        checkedInByName: userData.name,
-        checkedInAt: new Date(),
-        attendanceRound: settings?.currentSession || 'Default',
-      };
-
-      await updateDoc(doc(db, 'teams', selectedTeam.id), {
-        presentCount,
-        absentCount,
-        attendanceStatus: status,
-        checkedIn: true,
-        checkedInBy: user.uid,
-        checkedInByName: userData.name,
-        checkedInAt: serverTimestamp(),
-        attendanceRound: settings?.currentSession || 'Default',
-        attendanceLocked: true,
-        attendanceRecords: arrayUnion(attendanceRecord),
-        lastModified: serverTimestamp(),
-      });
-
-      toast.success(`✅ Attendance marked: ${status} (${presentCount}/${totalMembers})`);
-      // Reload team data
-      await loadTeam(selectedTeam.id);
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to mark attendance');
-    } finally {
-      setConfirming(false);
-    }
-  };
-
-  const handleUnlock = async (teamId) => {
-    if (!isAdmin) return;
-    try {
-      await updateDoc(doc(db, 'teams', teamId), {
-        attendanceLocked: false,
-        lastModified: serverTimestamp(),
-      });
-      toast.success('Attendance unlocked for re-marking');
-      await loadTeam(teamId);
-    } catch (err) {
-      toast.error('Failed to unlock');
-    }
-  };
-
-  const handleOverride = async () => {
-    if (!isAdmin) return;
-    // Admin can override — doesn't check lock
-    await handleConfirmAttendanceForce();
-  };
-
-  const handleConfirmAttendanceForce = async () => {
-    if (!selectedTeam) return;
-    setConfirming(true);
-    try {
-      const totalMembers = selectedTeam.totalMembers || 0;
-      const absentCount = totalMembers - presentCount;
-      const status = calculateStatus(presentCount, totalMembers);
-
-      const attendanceRecord = {
-        presentCount,
-        absentCount,
-        attendanceStatus: status,
-        checkedInBy: user.uid,
-        checkedInByName: `${userData.name} (Override)`,
-        checkedInAt: new Date(),
-        attendanceRound: settings?.currentSession || 'Default',
-      };
-
-      await updateDoc(doc(db, 'teams', selectedTeam.id), {
-        presentCount,
-        absentCount,
-        attendanceStatus: status,
-        checkedIn: true,
-        checkedInBy: user.uid,
-        checkedInByName: `${userData.name} (Override)`,
-        checkedInAt: serverTimestamp(),
-        attendanceRound: settings?.currentSession || 'Default',
-        attendanceLocked: true,
-        attendanceRecords: arrayUnion(attendanceRecord),
-        lastModified: serverTimestamp(),
-      });
-
-      toast.success(`✅ Attendance overridden: ${status}`);
-      await loadTeam(selectedTeam.id);
-    } catch (err) {
-      toast.error('Override failed');
-    } finally {
-      setConfirming(false);
-    }
+  const handleRefresh = () => {
+    if (selectedTeam) loadTeam(selectedTeam.id);
   };
 
   return (
@@ -216,106 +89,16 @@ export default function AttendancePanel() {
               <p className="text-gray-500">Select a team to mark attendance</p>
             </div>
           ) : (
-            <div className="space-y-6">
-              {/* Team Info */}
+            <div className="space-y-4">
               <div>
                 <h3 className="text-lg font-bold text-gray-800">{selectedTeam.teamName}</h3>
                 <p className="text-sm text-gray-500">{selectedTeam.collegeName}</p>
-                <p className="text-sm text-gray-500">Leader: {selectedTeam.leaderName}</p>
               </div>
-
-              {/* Duplicate Warning */}
-              {selectedTeam.attendanceLocked && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="text-yellow-600 mt-0.5" size={20} />
-                    <div>
-                      <p className="font-semibold text-yellow-800">
-                        ⚠ Already marked by {selectedTeam.checkedInByName}
-                      </p>
-                      <p className="text-sm text-yellow-700 mt-1">
-                        at {formatTimestamp(selectedTeam.checkedInAt)} — {selectedTeam.attendanceRound}
-                      </p>
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleUnlock(selectedTeam.id)}
-                          className="mt-2 flex items-center gap-1 px-3 py-1.5 bg-yellow-200 text-yellow-800 rounded-lg text-xs font-medium hover:bg-yellow-300 transition"
-                        >
-                          <Unlock size={14} /> Unlock for Re-marking
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Members List */}
-              <div>
-                <h4 className="font-semibold text-gray-700 mb-2">
-                  Members ({selectedTeam.totalMembers || 0})
-                </h4>
-                <div className="space-y-1">
-                  {(selectedTeam.members || []).map((m, i) => (
-                    <div key={i} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg text-sm">
-                      <span className="w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs">{i + 1}</span>
-                      <span className="font-medium">{m.name}</span>
-                      <span className="text-gray-400 text-xs">{m.dept}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Present Count */}
-              <div>
-                <label className="block font-semibold text-gray-700 mb-2">
-                  Present Count
-                </label>
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => setPresentCount(Math.max(0, presentCount - 1))}
-                    disabled={selectedTeam.attendanceLocked && !isAdmin}
-                    className="w-10 h-10 rounded-full bg-red-100 text-red-600 font-bold text-lg hover:bg-red-200 transition disabled:opacity-50"
-                  >
-                    −
-                  </button>
-                  <div className="text-center">
-                    <span className="text-3xl font-bold text-gray-800">{presentCount}</span>
-                    <span className="text-gray-400 text-lg"> / {selectedTeam.totalMembers || 0}</span>
-                  </div>
-                  <button
-                    onClick={() => setPresentCount(Math.min(selectedTeam.totalMembers || 0, presentCount + 1))}
-                    disabled={selectedTeam.attendanceLocked && !isAdmin}
-                    className="w-10 h-10 rounded-full bg-green-100 text-green-600 font-bold text-lg hover:bg-green-200 transition disabled:opacity-50"
-                  >
-                    +
-                  </button>
-                </div>
-                <p className="text-sm text-gray-500 mt-2">
-                  Status: <strong>{calculateStatus(presentCount, selectedTeam.totalMembers || 0)}</strong>
-                </p>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4 border-t border-gray-100">
-                {(!selectedTeam.attendanceLocked || isAdmin) && (
-                  <button
-                    onClick={selectedTeam.attendanceLocked && isAdmin ? handleOverride : handleConfirmAttendance}
-                    disabled={confirming || (!settings?.attendanceEnabled && !isAdmin)}
-                    className="flex-1 py-3 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {confirming ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <span className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></span>
-                        Confirming...
-                      </span>
-                    ) : selectedTeam.attendanceLocked && isAdmin ? (
-                      '🔓 Override Attendance'
-                    ) : (
-                      '✅ Confirm Attendance'
-                    )}
-                  </button>
-                )}
-              </div>
+              <MemberAttendanceForm
+                team={selectedTeam}
+                onSuccess={handleRefresh}
+                onUnlock={handleRefresh}
+              />
             </div>
           )}
         </div>

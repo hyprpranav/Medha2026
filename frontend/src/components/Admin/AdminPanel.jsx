@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { collection, query, orderBy, getDocs, doc, updateDoc, deleteDoc, where } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, updateDoc, deleteDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useSettings } from '../../hooks/useSettings';
-import { Shield, UserCheck, UserX } from 'lucide-react';
+import { Shield, UserCheck, UserX, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function AdminPanel() {
@@ -11,6 +11,7 @@ export default function AdminPanel() {
   const { settings, updateSettings } = useSettings();
   const [coordinators, setCoordinators] = useState([]);
   const [loadingCoords, setLoadingCoords] = useState(true);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     fetchCoordinators();
@@ -63,6 +64,37 @@ export default function AdminPanel() {
     toast.success(`Session changed to ${session}`);
   };
 
+  const resetAllAttendance = async () => {
+    if (!confirm('⚠️ Are you sure? This will erase ALL attendance data from every team. This cannot be undone.')) return;
+    setResetting(true);
+    try {
+      const snap = await getDocs(collection(db, 'teams'));
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => {
+        batch.update(doc(db, 'teams', d.id), {
+          presentCount: 0,
+          absentCount: 0,
+          attendanceStatus: null,
+          checkedIn: false,
+          checkedInBy: null,
+          checkedInByName: null,
+          checkedInAt: null,
+          attendanceRound: null,
+          attendanceLocked: false,
+          attendanceRecords: [],
+          memberAttendance: {},
+        });
+      });
+      await batch.commit();
+      toast.success(`✅ Attendance reset for ${snap.docs.length} teams`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Reset failed');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   if (!isAdmin) return <div className="text-center py-12 text-gray-500">Admin access required</div>;
 
   return (
@@ -88,13 +120,15 @@ export default function AdminPanel() {
             </div>
             <button
               onClick={toggleAttendance}
-              className={`relative w-14 h-7 rounded-full transition ${
+              className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out cursor-pointer ${
                 settings?.attendanceEnabled ? 'bg-green-500' : 'bg-gray-300'
               }`}
+              role="switch"
+              aria-checked={settings?.attendanceEnabled}
             >
               <span
-                className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${
-                  settings?.attendanceEnabled ? 'translate-x-7' : 'translate-x-0.5'
+                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform duration-200 ease-in-out ${
+                  settings?.attendanceEnabled ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>
@@ -174,6 +208,30 @@ export default function AdminPanel() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Reset All Attendance */}
+      <div className="bg-white rounded-xl border border-red-100 p-6">
+        <h3 className="font-semibold text-red-700 mb-4 flex items-center gap-2">
+          <RotateCcw size={18} /> Reset Attendance Data
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          This will clear <strong>all</strong> attendance markings from every team — present counts, member toggles, lock status, and history records. This cannot be undone.
+        </p>
+        <button
+          onClick={resetAllAttendance}
+          disabled={resetting}
+          className="px-6 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition disabled:opacity-50"
+        >
+          {resetting ? (
+            <span className="flex items-center gap-2">
+              <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+              Resetting...
+            </span>
+          ) : (
+            '🗑 Reset All Attendance Data'
+          )}
+        </button>
       </div>
     </div>
   );

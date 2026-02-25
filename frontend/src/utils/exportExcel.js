@@ -98,3 +98,41 @@ function formatTs(ts) {
   const date = ts.toDate ? ts.toDate() : ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts);
   return date.toLocaleString('en-IN');
 }
+
+// Certificate download sheet
+export function exportCertificateSheet(teams, filename = 'medha_certificates.xlsx') {
+  const wb = XLSX.utils.book_new();
+
+  const data = teams.map((team, idx) => {
+    const members = team.members || [];
+    const row = {
+      'S.No': idx + 1,
+      'Team ID': team.id || '',
+      'Team Name': team.teamName || '',
+      'College Name': team.collegeName || '',
+      'Leader Name': team.leaderName || '',
+    };
+    for (let i = 0; i < 4; i++) {
+      row[`Member ${i + 1}`] = members[i]?.name || '';
+    }
+    return row;
+  });
+
+  const ws = XLSX.utils.json_to_sheet(data);
+
+  // Set column widths for readability
+  ws['!cols'] = [
+    { wch: 6 },   // S.No
+    { wch: 22 },  // Team ID
+    { wch: 28 },  // Team Name
+    { wch: 30 },  // College Name
+    { wch: 22 },  // Leader Name
+    { wch: 22 },  // Member 1
+    { wch: 22 },  // Member 2
+    { wch: 22 },  // Member 3
+    { wch: 22 },  // Member 4
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Certificates');
+  XLSX.writeFile(wb, filename);
+}
