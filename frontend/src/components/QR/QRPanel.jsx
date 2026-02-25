@@ -8,7 +8,8 @@ import { db } from '../../firebase/config';
 import { QrCode, Camera, Download, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const BASE_URL = 'https://medha2026.vercel.app';
+// Use current domain so QR works on both localhost and Vercel
+const BASE_URL = typeof window !== 'undefined' ? window.location.origin : 'https://medha2026.vercel.app';
 
 export default function QRPanel() {
   const [searchParams] = useSearchParams();
@@ -18,6 +19,7 @@ export default function QRPanel() {
   const [teamId, setTeamId] = useState(searchParams.get('team') || '');
   const [teamData, setTeamData] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState('unknown'); // 'unknown' | 'granted' | 'denied'
   const scannerRef = useRef(null);
 
   // Load team for QR generation
@@ -91,18 +93,31 @@ export default function QRPanel() {
     };
   }, []);
 
-  // QR Scanner
-  const startScanner = () => {
+  // Request camera permission explicitly first, then start scanner
+  const startScanner = async () => {
+    // Explicitly request camera permission
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      // Permission granted — stop the stream immediately, html5-qrcode will open its own
+      stream.getTracks().forEach(t => t.stop());
+      setCameraPermission('granted');
+    } catch (err) {
+      setCameraPermission('denied');
+      toast.error('Camera access denied. Please allow camera in browser settings and try again.');
+      return;
+    }
+
     setScanning(true);
     setTimeout(() => {
       const scanner = new Html5QrcodeScanner('qr-reader', {
         qrbox: { width: 250, height: 250 },
         fps: 10,
+        rememberLastUsedCamera: true,
+        supportedScanTypes: [0], // 0 = SCAN_TYPE_CAMERA
       });
 
       scanner.render(
         (decodedText) => {
-          // Extract team ID from URL
           const match = decodedText.match(/\/team\/([a-zA-Z0-9_-]+)/);
           if (match) {
             scanner.clear();
@@ -110,21 +125,19 @@ export default function QRPanel() {
             toast.success('QR scanned! Loading team...');
             navigate(`/attendance?team=${match[1]}`);
           } else {
-            toast.error('Invalid QR code');
+            toast.error('Invalid QR code — not a MEDHA team QR');
           }
         },
-        (err) => {
-          // Scan error - ignore, keep scanning
-        }
+        () => { /* scan errors are normal, ignore */ }
       );
 
       scannerRef.current = scanner;
-    }, 100);
+    }, 200);
   };
 
   const stopScanner = () => {
     if (scannerRef.current) {
-      scannerRef.current.clear();
+      try { scannerRef.current.clear(); } catch (e) {}
     }
     setScanning(false);
   };
@@ -218,12 +231,18 @@ export default function QRPanel() {
             {!scanning ? (
               <div className="space-y-4">
                 <Camera size={64} className="mx-auto text-gray-300" />
-                <p className="text-gray-500">Click to start QR scanner</p>
+                <p className="text-gray-600 font-medium">Scan a team's QR code</p>
+                <p className="text-xs text-gray-400">Camera permission will be requested when you click Start</p>
+                {cameraPermission === 'denied' && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700">
+                    ⚠ Camera blocked. Go to browser settings → Site permissions → Camera → Allow for this site.
+                  </div>
+                )}
                 <button
                   onClick={startScanner}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition"
+                  className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition flex items-center gap-2 mx-auto"
                 >
-                  Start Scanner
+                  <Camera size={18} /> Start Scanner
                 </button>
               </div>
             ) : (
