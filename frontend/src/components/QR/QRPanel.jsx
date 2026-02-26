@@ -62,22 +62,49 @@ export default function QRPanel() {
   // QR URL
   const qrUrl = teamData ? `${BASE_URL}/team/${teamData.id}` : '';
 
-  // Download QR as image
+  // Download QR as image with team name + ID below
   const downloadQR = () => {
     const svg = document.getElementById('qr-code-svg');
     if (!svg) return;
     const svgData = new XMLSerializer().serializeToString(svg);
+
+    const qrSize = 512;
+    const padding = 24;
+    const nameSize = 28;
+    const idSize = 22;
+    const lineGap = 10;
+    const bottomPad = 24;
+    const canvasHeight = qrSize + padding + nameSize + lineGap + idSize + bottomPad;
+
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 512;
+    canvas.width = qrSize;
+    canvas.height = canvasHeight;
     const ctx = canvas.getContext('2d');
+
     const img = new Image();
     img.onload = () => {
+      // White background
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, 512, 512);
-      ctx.drawImage(img, 0, 0, 512, 512);
+      ctx.fillRect(0, 0, qrSize, canvasHeight);
+
+      // QR code
+      ctx.drawImage(img, 0, 0, qrSize, qrSize);
+
+      // Team Name
+      ctx.fillStyle = '#1e293b';
+      ctx.font = `bold ${nameSize}px "Segoe UI", Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      const teamName = teamData?.teamName || '';
+      ctx.fillText(teamName, qrSize / 2, qrSize + padding, qrSize - 32);
+
+      // Team ID
+      ctx.fillStyle = '#2563eb';
+      ctx.font = `${idSize}px "Courier New", monospace`;
+      ctx.fillText(teamData?.id || '', qrSize / 2, qrSize + padding + nameSize + lineGap, qrSize - 32);
+
       const link = document.createElement('a');
-      link.download = `QR_${teamData?.teamName || 'team'}.png`;
+      link.download = `QR_${teamData?.teamName || 'team'}_${teamData?.id || ''}.png`;
       link.href = canvas.toDataURL('image/png');
       link.click();
     };
