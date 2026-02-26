@@ -33,7 +33,8 @@ export default function AdminDashboard() {
       const partial = teams.filter((t) => t.attendanceStatus === 'PARTIAL').length;
       const absent = teams.filter((t) => t.attendanceStatus === 'ABSENT').length;
       const notMarked = teams.filter((t) => !t.checkedIn).length;
-      const totalMembers = teams.reduce((sum, t) => sum + (t.totalMembers || 0), 0);
+      // boysCount + girlsCount includes the leader — totalMembers only counts the members array
+      const totalMembers = teams.reduce((sum, t) => sum + (t.boysCount || 0) + (t.girlsCount || 0), 0);
       const totalPresent = teams.reduce((sum, t) => sum + (t.presentCount || 0), 0);
 
       setStats({ totalTeams, present, partial, absent, notMarked, totalMembers, totalPresent });
@@ -79,7 +80,7 @@ export default function AdminDashboard() {
             <p className="font-semibold">{settings?.attendanceEnabled ? '🟢 Open' : '🔴 Closed'}</p>
           </div>
           <div className="bg-white/10 rounded-lg px-4 py-2">
-            <span className="text-sm text-blue-200">Total Members</span>
+            <span className="text-sm text-blue-200">Total Participants</span>
             <p className="font-semibold">{stats.totalPresent} / {stats.totalMembers} present</p>
           </div>
         </div>
