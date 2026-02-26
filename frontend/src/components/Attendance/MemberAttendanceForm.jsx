@@ -234,49 +234,65 @@ export default function MemberAttendanceForm({ team, onSuccess, onUnlock }) {
       </div>
 
       {/* Member Toggle List */}
-      <div className="space-y-1.5 max-h-[45vh] overflow-y-auto">
-        {allPeople.map((person) => (
-          <div
-            key={person.key}
-            onClick={() => !isDisabled && toggleMember(person.key)}
-            className={`flex items-center justify-between p-3 rounded-lg border transition cursor-pointer select-none ${
-              memberStatus[person.key]
-                ? 'bg-green-50 border-green-200'
-                : 'bg-gray-50 border-gray-100'
-            } ${isDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-sm active:scale-[0.99]'}`}
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
-                  person.key === 'leader' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
-                }`}
-              >
-                {person.key === 'leader' ? 'L' : Number(person.key.replace('m', '')) + 1}
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-800 truncate">{person.name}</p>
-                <p className="text-xs text-gray-500">{person.role}</p>
+      <div className="space-y-1.5 max-h-[45vh] overflow-y-auto pr-1">
+        {allPeople.map((person) => {
+          const isPresent = memberStatus[person.key];
+          return (
+            <div
+              key={person.key}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-xl border transition select-none ${
+                isPresent
+                  ? 'bg-green-50 border-green-200'
+                  : 'bg-red-50 border-red-200'
+              }`}
+            >
+              {/* Avatar + Name */}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                    person.key === 'leader'
+                      ? 'bg-purple-100 text-purple-600'
+                      : 'bg-blue-100 text-blue-600'
+                  }`}
+                >
+                  {person.key === 'leader' ? 'L' : Number(person.key.replace('m', '')) + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-800 truncate">{person.name}</p>
+                  <p className="text-xs text-gray-500">{person.role}</p>
+                </div>
+              </div>
+
+              {/* Status badge + action button */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {/* Explicit status label */}
+                <span
+                  className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                    isPresent
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {isPresent ? 'PRESENT' : 'ABSENT'}
+                </span>
+
+                {/* Toggle button */}
+                {!isDisabled && (
+                  <button
+                    onClick={() => toggleMember(person.key)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${
+                      isPresent
+                        ? 'bg-white border-red-200 text-red-600 hover:bg-red-50'
+                        : 'bg-white border-green-200 text-green-600 hover:bg-green-50'
+                    }`}
+                  >
+                    {isPresent ? 'Mark Absent' : 'Mark Present'}
+                  </button>
+                )}
               </div>
             </div>
-
-            {/* Toggle Switch */}
-            <button
-              onClick={(e) => { e.stopPropagation(); if (!isDisabled) toggleMember(person.key); }}
-              disabled={isDisabled}
-              className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-colors duration-200 ${
-                isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'
-              } ${memberStatus[person.key] ? 'bg-green-500' : 'bg-gray-300'}`}
-              role="switch"
-              aria-checked={memberStatus[person.key]}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                  memberStatus[person.key] ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Confirm Button */}
