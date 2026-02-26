@@ -161,7 +161,7 @@ export default function TeamDetails({ team: initialTeam, onClose }) {
                 <span className="font-semibold ml-2">{team.attendanceStatus || 'NOT MARKED'}</span>
               </div>
               <div className="text-right text-sm">
-                <p>Present: <strong>{team.presentCount ?? '—'}</strong> / {team.totalMembers || 0}</p>
+                <p>Present: <strong>{team.presentCount ?? '—'}</strong> / {(team.boysCount || 0) + (team.girlsCount || 0)}</p>
               </div>
             </div>
             {team.checkedInByName && (
@@ -225,7 +225,7 @@ export default function TeamDetails({ team: initialTeam, onClose }) {
           <div>
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-semibold text-gray-700">
-                Members ({formData.members.length})
+                Members ({formData.members.length} + 1 leader = {formData.members.length + 1} total)
               </h4>
               {editing && (
                 <button

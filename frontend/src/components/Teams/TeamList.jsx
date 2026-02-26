@@ -192,7 +192,7 @@ export default function TeamList() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="font-medium">
-                          {team.presentCount ?? '—'} / {team.totalMembers || 0}
+                          {team.presentCount ?? '—'} / {(team.boysCount || 0) + (team.girlsCount || 0)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
