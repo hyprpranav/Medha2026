@@ -14,6 +14,7 @@ export default function AdminPanel() {
   const [resetting, setResetting] = useState(false);
   const [newSessionName, setNewSessionName] = useState('');
   const [startingSession, setStartingSession] = useState(false);
+  const [switchingSession, setSwitchingSession] = useState(false);
 
   useEffect(() => {
     fetchCoordinators();
@@ -61,9 +62,62 @@ export default function AdminPanel() {
     toast.success(settings?.attendanceEnabled ? 'Attendance window CLOSED' : 'Attendance window OPENED');
   };
 
-  const changeSession = async (session) => {
-    await updateSettings({ currentSession: session });
-    toast.success(`Session changed to ${session}`);
+  // ─── ATTENDANCE FIELDS (the ones we archive / restore per session) ───
+  const ATTENDANCE_FIELDS = ['presentCount', 'absentCount', 'attendanceStatus', 'checkedIn', 'checkedInBy', 'checkedInByName', 'checkedInAt', 'attendanceRound', 'attendanceLocked', 'memberAttendance'];
+
+  const blankAttendance = () => ({
+    presentCount: 0,
+    absentCount: 0,
+    attendanceStatus: null,
+    checkedIn: false,
+    checkedInBy: null,
+    checkedInByName: null,
+    checkedInAt: null,
+    attendanceRound: null,
+    attendanceLocked: false,
+    memberAttendance: {},
+  });
+
+  // ─── Switch Session: save current → load target ───
+  const changeSession = async (targetSession) => {
+    const currentSession = settings?.currentSession;
+    if (targetSession === currentSession) return;
+
+    setSwitchingSession(true);
+    try {
+      const snap = await getDocs(collection(db, 'teams'));
+      const batch = writeBatch(db);
+
+      snap.docs.forEach((teamDoc) => {
+        const data = teamDoc.data();
+        const sessionData = data.sessionData || {};
+
+        // 1. Archive current session's live fields into sessionData[currentSession]
+        if (currentSession) {
+          const currentFields = {};
+          ATTENDANCE_FIELDS.forEach((f) => { currentFields[f] = data[f] ?? null; });
+          sessionData[currentSession] = currentFields;
+        }
+
+        // 2. Load target session's data (or blank if never marked)
+        const targetFields = sessionData[targetSession] || blankAttendance();
+
+        // 3. Write back
+        batch.update(doc(db, 'teams', teamDoc.id), {
+          ...targetFields,
+          sessionData,
+        });
+      });
+
+      await batch.commit();
+      await updateSettings({ currentSession: targetSession });
+      toast.success(`Switched to "${targetSession}" — attendance data loaded`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to switch session');
+    } finally {
+      setSwitchingSession(false);
+    }
   };
 
   const resetAllAttendance = async () => {
@@ -74,17 +128,9 @@ export default function AdminPanel() {
       const batch = writeBatch(db);
       snap.docs.forEach((d) => {
         batch.update(doc(db, 'teams', d.id), {
-          presentCount: 0,
-          absentCount: 0,
-          attendanceStatus: null,
-          checkedIn: false,
-          checkedInBy: null,
-          checkedInByName: null,
-          checkedInAt: null,
-          attendanceRound: null,
-          attendanceLocked: false,
+          ...blankAttendance(),
           attendanceRecords: [],
-          memberAttendance: {},
+          sessionData: {},
         });
       });
       await batch.commit();
@@ -99,7 +145,7 @@ export default function AdminPanel() {
 
   if (!isAdmin) return <div className="text-center py-12 text-gray-500">Admin access required</div>;
 
-  // Start a brand-new session: add session to list, switch to it, clear all attendance
+  // Start a brand-new session: archive current data, add session, switch, clear
   const startNewSession = async () => {
     const name = newSessionName.trim();
     if (!name) { toast.error('Enter a session name'); return; }
@@ -107,36 +153,40 @@ export default function AdminPanel() {
     const existing = settings?.sessions || ['Morning', 'Afternoon', 'Final'];
     if (existing.includes(name)) { toast.error(`"${name}" already exists. Choose a different name.`); return; }
 
-    if (!confirm(`Start new session "${name}"?\n\nThis will:\n• Add "${name}" to the session list\n• Switch the active session to "${name}"\n• Clear ALL current attendance markings (old data stays in history)\n\nAre you sure?`)) return;
+    if (!confirm(`Start new session "${name}"?\n\nThis will:\n• Save current "${settings?.currentSession}" attendance data\n• Add "${name}" to the session list\n• Switch to "${name}" with a fresh blank slate\n\nYou can switch back to "${settings?.currentSession}" anytime to see old data.`)) return;
 
     setStartingSession(true);
     try {
-      // 1. Update settings — add session + switch to it
-      const updatedSessions = [...existing, name];
-      await updateSettings({ sessions: updatedSessions, currentSession: name });
+      const currentSession = settings?.currentSession;
 
-      // 2. Reset attendance on all teams (history in attendanceRecords stays)
+      // 1. Archive current attendance + clear for new session
       const snap = await getDocs(collection(db, 'teams'));
       const batch = writeBatch(db);
-      snap.docs.forEach((d) => {
-        batch.update(doc(db, 'teams', d.id), {
-          presentCount: 0,
-          absentCount: 0,
-          attendanceStatus: null,
-          checkedIn: false,
-          checkedInBy: null,
-          checkedInByName: null,
-          checkedInAt: null,
-          attendanceRound: null,
-          attendanceLocked: false,
-          memberAttendance: {},
-          // NOTE: attendanceRecords is NOT cleared — old history is preserved
+      snap.docs.forEach((teamDoc) => {
+        const data = teamDoc.data();
+        const sessionData = data.sessionData || {};
+
+        // Save current session's data
+        if (currentSession) {
+          const currentFields = {};
+          ATTENDANCE_FIELDS.forEach((f) => { currentFields[f] = data[f] ?? null; });
+          sessionData[currentSession] = currentFields;
+        }
+
+        // Write: archived data + blank main fields
+        batch.update(doc(db, 'teams', teamDoc.id), {
+          ...blankAttendance(),
+          sessionData,
         });
       });
       await batch.commit();
 
+      // 2. Update settings — add session + switch
+      const updatedSessions = [...existing, name];
+      await updateSettings({ sessions: updatedSessions, currentSession: name });
+
       setNewSessionName('');
-      toast.success(`✅ Session "${name}" started! All teams reset to NOT MARKED.`);
+      toast.success(`✅ Session "${name}" started! All teams are NOT MARKED.\nSwitch back to "${currentSession}" to see old data.`);
     } catch (err) {
       console.error(err);
       toast.error('Failed to start new session');
@@ -184,13 +234,18 @@ export default function AdminPanel() {
 
           {/* Session Selector */}
           <div className="p-4 bg-gray-50 rounded-xl">
-            <p className="font-medium text-gray-800 mb-2">Current Session</p>
+            <p className="font-medium text-gray-800 mb-2">
+              Current Session
+              {switchingSession && <span className="ml-2 text-sm text-blue-500 animate-pulse">Switching…</span>}
+            </p>
+            <p className="text-xs text-gray-500 mb-3">Clicking a session saves current data and loads that session's attendance.</p>
             <div className="flex gap-2 flex-wrap">
               {(settings?.sessions || ['Morning', 'Afternoon', 'Final']).map((s) => (
                 <button
                   key={s}
                   onClick={() => changeSession(s)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  disabled={switchingSession}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${
                     settings?.currentSession === s
                       ? 'bg-blue-600 text-white'
                       : 'bg-white border border-gray-200 text-gray-600 hover:border-blue-300'
