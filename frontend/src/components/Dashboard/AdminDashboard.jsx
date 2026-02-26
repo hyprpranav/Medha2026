@@ -21,7 +21,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [settings?.currentSession]);
 
   const fetchStats = async () => {
     try {

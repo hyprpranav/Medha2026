@@ -29,7 +29,7 @@ export default function MemberAttendanceForm({ team, onSuccess, onUnlock }) {
       initial[p.key] = existing[p.key] ?? false;
     });
     setMemberStatus(initial);
-  }, [team.id, team.attendanceLocked]);
+  }, [team.id, team.attendanceLocked, team.attendanceRound]);
 
   const toggleMember = (key) => {
     if (team.attendanceLocked && !isAdmin) return;
