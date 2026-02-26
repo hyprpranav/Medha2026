@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTeams } from '../../hooks/useTeams';
 import { doc, getDoc } from 'firebase/firestore';
@@ -16,16 +16,21 @@ export default function TeamDetails({ team: initialTeam, onClose }) {
   const [editing, setEditing] = useState(false);
   const [showAttendance, setShowAttendance] = useState(false);
   const [formData, setFormData] = useState({
-    teamId: team.id || '',
-    teamName: team.teamName || '',
-    leaderName: team.leaderName || '',
-    leaderEmail: team.leaderEmail || '',
-    leaderPhone: team.leaderPhone || '',
-    members: [...(team.members || [])],
+    teamId: initialTeam.id || '',
+    teamName: initialTeam.teamName || '',
+    leaderName: initialTeam.leaderName || '',
+    leaderEmail: initialTeam.leaderEmail || '',
+    leaderPhone: initialTeam.leaderPhone || '',
+    members: [...(initialTeam.members || [])],
   });
   const [swapMode, setSwapMode] = useState(false);
   const [swapIndices, setSwapIndices] = useState([]);
   const [saving, setSaving] = useState(false);
+
+  // Auto-refresh team from Firestore on open
+  useEffect(() => {
+    refreshTeam();
+  }, [initialTeam.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -101,7 +106,17 @@ export default function TeamDetails({ team: initialTeam, onClose }) {
     try {
       const snap = await getDoc(doc(db, 'teams', team.id));
       if (snap.exists()) {
-        setTeam({ id: snap.id, ...snap.data() });
+        const fresh = { id: snap.id, ...snap.data() };
+        setTeam(fresh);
+        // Also update formData so edits start from fresh values
+        setFormData({
+          teamId: fresh.id || '',
+          teamName: fresh.teamName || '',
+          leaderName: fresh.leaderName || '',
+          leaderEmail: fresh.leaderEmail || '',
+          leaderPhone: fresh.leaderPhone || '',
+          members: [...(fresh.members || [])],
+        });
       }
     } catch (err) {
       console.error('Failed to refresh team:', err);

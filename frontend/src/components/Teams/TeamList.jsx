@@ -182,7 +182,7 @@ export default function TeamList() {
                       className="border-b border-gray-50 hover:bg-gray-50 transition cursor-pointer"
                       onClick={() => setSelectedTeam(team)}
                     >
-                      <td className="px-4 py-3 text-gray-400 font-mono text-xs">{team.id}</td>
+                      <td className="px-4 py-3 text-gray-400 font-mono text-xs">{team.teamId || team.id}</td>
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-800">{team.teamName}</p>
                         <p className="text-xs text-gray-500">{team.leaderName}</p>

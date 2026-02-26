@@ -31,22 +31,25 @@ export function useTeams() {
   useEffect(() => {
     setLoading(true);
 
+    // When a status filter is active we need ALL teams so client-side
+    // filtering doesn't miss any. With ≤100 teams this is cheap.
+    const isFiltered = filter !== 'all';
+
     let q;
     if (searchTerm.trim()) {
-      // Debounced search by teamName (lowercased)
       const term = searchTerm.trim().toLowerCase();
       q = query(
         collection(db, 'teams'),
         where('teamNameLower', '>=', term),
         where('teamNameLower', '<=', term + '\uf8ff'),
         orderBy('teamNameLower'),
-        limit(PAGE_SIZE)
+        ...(isFiltered ? [] : [limit(PAGE_SIZE)])
       );
     } else {
       q = query(
         collection(db, 'teams'),
         orderBy('teamName'),
-        limit(PAGE_SIZE)
+        ...(isFiltered ? [] : [limit(PAGE_SIZE)])
       );
     }
 
@@ -70,7 +73,7 @@ export function useTeams() {
 
       setTeams(filtered);
       setLastDoc(snapshot.docs[snapshot.docs.length - 1] || null);
-      setHasMore(snapshot.docs.length === PAGE_SIZE);
+      setHasMore(!isFiltered && snapshot.docs.length === PAGE_SIZE);
       setLoading(false);
     }, (error) => {
       console.error('Error fetching teams:', error);
