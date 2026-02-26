@@ -3,7 +3,8 @@ import { useTeams } from '../../hooks/useTeams';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSettings } from '../../hooks/useSettings';
 import TeamDetails from './TeamDetails';
-import { Search, Users, Edit3, QrCode, ClipboardCheck, SlidersHorizontal } from 'lucide-react';
+import AddTeamModal from './AddTeamModal';
+import { Search, Users, Edit3, QrCode, ClipboardCheck, SlidersHorizontal, UserPlus } from 'lucide-react';
 import { getStatusColor, getStatusIcon, formatTimestamp, debounce } from '../../utils/helpers';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,6 +13,7 @@ export default function TeamList() {
   const { isAdmin } = useAuth();
   const { settings } = useSettings();
   const [selectedTeam, setSelectedTeam] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [trackFilter, setTrackFilter] = useState('all');
   const [genderFilter, setGenderFilter] = useState('all');
   const navigate = useNavigate();
@@ -71,10 +73,16 @@ export default function TeamList() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-xl font-bold text-gray-800">Teams</h2>
-        <div className="flex items-center gap-3 text-sm text-gray-500">
-          <span>{filteredTeams.length} teams</span>
-          <span className="text-blue-600 font-medium">♂ {totalBoys}</span>
-          <span className="text-pink-600 font-medium">♀ {totalGirls}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">{filteredTeams.length} teams</span>
+          <span className="text-sm text-blue-600 font-medium">♂ {totalBoys}</span>
+          <span className="text-sm text-pink-600 font-medium">♀ {totalGirls}</span>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition"
+          >
+            <UserPlus size={15} /> Add Team
+          </button>
         </div>
       </div>
 
@@ -247,6 +255,10 @@ export default function TeamList() {
           team={selectedTeam}
           onClose={() => setSelectedTeam(null)}
         />
+      )}
+
+      {showAddModal && (
+        <AddTeamModal onClose={() => setShowAddModal(false)} />
       )}
     </div>
   );

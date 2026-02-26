@@ -155,6 +155,50 @@ export function useTeams() {
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
   };
 
+  // Add new team
+  const addTeam = async (teamData) => {
+    const members = teamData.members || [];
+    const boysCount = members.filter(m => m.gender === 'Male').length +
+      (teamData.leaderGender === 'Male' ? 1 : 0);
+    const girlsCount = members.filter(m => m.gender === 'Female').length +
+      (teamData.leaderGender === 'Female' ? 1 : 0);
+
+    const doc_data = {
+      teamId: teamData.teamId || '',
+      teamName: teamData.teamName.trim(),
+      teamNameLower: teamData.teamName.trim().toLowerCase(),
+      collegeName: teamData.collegeName || '',
+      leaderName: teamData.leaderName || '',
+      leaderEmail: teamData.leaderEmail || '',
+      leaderPhone: teamData.leaderPhone || '',
+      leaderGender: teamData.leaderGender || '',
+      members,
+      totalMembers: members.length,
+      boysCount,
+      girlsCount,
+      track: teamData.track || '',
+      projectTitle: teamData.projectTitle || '',
+      // Clean attendance fields
+      presentCount: 0,
+      absentCount: 0,
+      attendanceStatus: null,
+      checkedIn: false,
+      checkedInBy: null,
+      checkedInByName: null,
+      checkedInAt: null,
+      attendanceRound: null,
+      attendanceLocked: false,
+      attendanceRecords: [],
+      memberAttendance: {},
+      qrToken: null,
+      createdAt: serverTimestamp(),
+      lastModified: serverTimestamp(),
+    };
+
+    const ref = await addDoc(collection(db, 'teams'), doc_data);
+    return ref.id;
+  };
+
   return {
     teams,
     loading,
@@ -168,5 +212,6 @@ export function useTeams() {
     deleteTeam,
     getTeam,
     getAllTeams,
+    addTeam,
   };
 }
