@@ -3,7 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { collection, query, orderBy, getDocs, doc, updateDoc, deleteDoc, where, writeBatch } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useSettings } from '../../hooks/useSettings';
-import { Shield, UserCheck, UserX, RotateCcw } from 'lucide-react';
+import { Shield, UserCheck, UserX, RotateCcw, PlusCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function AdminPanel() {
@@ -12,6 +12,8 @@ export default function AdminPanel() {
   const [coordinators, setCoordinators] = useState([]);
   const [loadingCoords, setLoadingCoords] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const [newSessionName, setNewSessionName] = useState('');
+  const [startingSession, setStartingSession] = useState(false);
 
   useEffect(() => {
     fetchCoordinators();
@@ -97,6 +99,52 @@ export default function AdminPanel() {
 
   if (!isAdmin) return <div className="text-center py-12 text-gray-500">Admin access required</div>;
 
+  // Start a brand-new session: add session to list, switch to it, clear all attendance
+  const startNewSession = async () => {
+    const name = newSessionName.trim();
+    if (!name) { toast.error('Enter a session name'); return; }
+
+    const existing = settings?.sessions || ['Morning', 'Afternoon', 'Final'];
+    if (existing.includes(name)) { toast.error(`"${name}" already exists. Choose a different name.`); return; }
+
+    if (!confirm(`Start new session "${name}"?\n\nThis will:\n• Add "${name}" to the session list\n• Switch the active session to "${name}"\n• Clear ALL current attendance markings (old data stays in history)\n\nAre you sure?`)) return;
+
+    setStartingSession(true);
+    try {
+      // 1. Update settings — add session + switch to it
+      const updatedSessions = [...existing, name];
+      await updateSettings({ sessions: updatedSessions, currentSession: name });
+
+      // 2. Reset attendance on all teams (history in attendanceRecords stays)
+      const snap = await getDocs(collection(db, 'teams'));
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => {
+        batch.update(doc(db, 'teams', d.id), {
+          presentCount: 0,
+          absentCount: 0,
+          attendanceStatus: null,
+          checkedIn: false,
+          checkedInBy: null,
+          checkedInByName: null,
+          checkedInAt: null,
+          attendanceRound: null,
+          attendanceLocked: false,
+          memberAttendance: {},
+          // NOTE: attendanceRecords is NOT cleared — old history is preserved
+        });
+      });
+      await batch.commit();
+
+      setNewSessionName('');
+      toast.success(`✅ Session "${name}" started! All teams reset to NOT MARKED.`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to start new session');
+    } finally {
+      setStartingSession(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-gray-800">Admin Panel</h2>
@@ -153,6 +201,54 @@ export default function AdminPanel() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Start New Session */}
+      <div className="bg-white rounded-xl border border-blue-100 p-6">
+        <h3 className="font-semibold text-blue-700 mb-2 flex items-center gap-2">
+          <PlusCircle size={18} /> Start New Session
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Creates a <strong>fresh attendance round</strong>. All teams will show as <strong>"NOT MARKED"</strong> — no present, no absent, completely blank. Previous attendance history is preserved in each team's records.
+        </p>
+
+        <div className="flex items-center gap-3 mb-3">
+          <input
+            type="text"
+            value={newSessionName}
+            onChange={(e) => setNewSessionName(e.target.value)}
+            placeholder="e.g. Afternoon, Day 2, Final Review..."
+            className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+          <button
+            onClick={startNewSession}
+            disabled={startingSession || !newSessionName.trim()}
+            className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold text-sm hover:bg-blue-700 transition disabled:opacity-50 flex items-center gap-2 whitespace-nowrap"
+          >
+            {startingSession ? (
+              <>
+                <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
+                Starting...
+              </>
+            ) : (
+              <>
+                <PlusCircle size={16} /> Start Session
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Current sessions list */}
+        <div className="mt-3 text-xs text-gray-500">
+          <span className="font-medium">Existing sessions:</span>{' '}
+          {(settings?.sessions || ['Morning', 'Afternoon', 'Final']).map((s, i) => (
+            <span key={s}>
+              <span className={`inline-block px-2 py-0.5 rounded-full mr-1 mb-1 ${
+                settings?.currentSession === s ? 'bg-blue-100 text-blue-700 font-bold' : 'bg-gray-100 text-gray-600'
+              }`}>{s}</span>
+            </span>
+          ))}
         </div>
       </div>
 
