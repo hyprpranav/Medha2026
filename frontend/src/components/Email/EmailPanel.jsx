@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Send, Mail, Users } from 'lucide-react';
+import { useTeams } from '../../hooks/useTeams';
+import { Send, Mail, Users, CheckCircle, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const EMAIL_API_URL = import.meta.env.VITE_EMAIL_API_URL || 'http://localhost:8000';
 
 export default function EmailPanel() {
   const { isAdmin, user } = useAuth();
+  const { getAllTeams } = useTeams();
   const [mode, setMode] = useState('manual'); // 'manual' | 'broadcast'
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [result, setResult] = useState(null); // {sent, total, errors}
 
   const handleSend = async () => {
     if (!subject.trim() || !body.trim()) {
@@ -24,23 +27,48 @@ export default function EmailPanel() {
     }
 
     setSending(true);
+    setResult(null);
     try {
+      let payload = {
+        mode,
+        subject,
+        body,
+        senderUid: user.uid,
+      };
+
+      if (mode === 'manual') {
+        payload.to = to;
+      } else {
+        // Broadcast: fetch all team emails from Firestore client-side
+        toast('Fetching team emails…', { icon: '📧' });
+        const allTeams = await getAllTeams();
+        const emails = allTeams
+          .map(t => t.leaderEmail)
+          .filter(e => e && e.includes('@'));
+        if (emails.length === 0) {
+          toast.error('No valid team leader emails found');
+          setSending(false);
+          return;
+        }
+        payload.recipients = emails;
+        toast(`Sending to ${emails.length} team leaders…`, { icon: '📨' });
+      }
+
       const response = await fetch(`${EMAIL_API_URL}/send-mail`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode, // 'manual' or 'broadcast'
-          to: mode === 'manual' ? to : undefined,
-          subject,
-          body,
-          senderUid: user.uid,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        toast.success(mode === 'broadcast' ? 'Broadcast email sent to all teams!' : 'Email sent successfully!');
+        if (mode === 'broadcast') {
+          setResult({ sent: data.sent, total: data.total, errors: data.errors });
+          toast.success(`Broadcast: ${data.sent}/${data.total} emails sent!`);
+        } else {
+          toast.success('Email sent successfully!');
+        }
         setTo('');
         setSubject('');
         setBody('');
@@ -70,7 +98,7 @@ export default function EmailPanel() {
         <h2 className="text-xl font-bold text-gray-800">Email System</h2>
         <div className="flex gap-2">
           <button
-            onClick={() => setMode('manual')}
+            onClick={() => { setMode('manual'); setResult(null); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               mode === 'manual' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600'
             }`}
@@ -78,7 +106,7 @@ export default function EmailPanel() {
             <Mail size={16} className="inline mr-1" /> Manual Email
           </button>
           <button
-            onClick={() => setMode('broadcast')}
+            onClick={() => { setMode('broadcast'); setResult(null); }}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
               mode === 'broadcast' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600'
             }`}
@@ -92,8 +120,25 @@ export default function EmailPanel() {
         {mode === 'broadcast' && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-4">
             <p className="text-sm text-yellow-800 font-medium">
-              ⚠ Broadcast will send this email to ALL registered team leaders.
+              ⚠ Broadcast will send this email to ALL registered team leaders with email addresses.
             </p>
+          </div>
+        )}
+
+        {/* Result summary */}
+        {result && (
+          <div className={`rounded-xl p-4 mb-4 ${result.errors?.length ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
+            <div className="flex items-center gap-2 mb-1">
+              {result.errors?.length
+                ? <AlertTriangle size={16} className="text-orange-600" />
+                : <CheckCircle size={16} className="text-green-600" />}
+              <span className="text-sm font-semibold">{result.sent}/{result.total} emails sent successfully</span>
+            </div>
+            {result.errors?.length > 0 && (
+              <ul className="text-xs text-orange-700 mt-2 space-y-0.5">
+                {result.errors.map((e, i) => <li key={i}>• {e}</li>)}
+              </ul>
+            )}
           </div>
         )}
 
