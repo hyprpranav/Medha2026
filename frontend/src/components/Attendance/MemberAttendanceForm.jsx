@@ -4,7 +4,7 @@ import { useSettings } from '../../hooks/useSettings';
 import { doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { calculateStatus, formatTimestamp } from '../../utils/helpers';
-import { AlertTriangle, Unlock } from 'lucide-react';
+import { AlertTriangle, Unlock, UserX } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function MemberAttendanceForm({ team, onSuccess, onUnlock }) {
@@ -46,6 +46,61 @@ export default function MemberAttendanceForm({ team, onSuccess, onUnlock }) {
   const presentCount = Object.values(memberStatus).filter(Boolean).length;
   const totalMembers = allPeople.length;
   const status = calculateStatus(presentCount, totalMembers);
+
+  // One-click: mark every member absent and save immediately
+  const handleMarkAllAbsent = async () => {
+    if (!settings?.attendanceEnabled && !isAdmin) {
+      toast.error('Attendance window is closed. Contact admin.');
+      return;
+    }
+    if (team.attendanceLocked && !isAdmin) {
+      toast.error(`Already marked by ${team.checkedInByName}`);
+      return;
+    }
+    if (!confirm(`Mark ALL ${totalMembers} members of "${team.teamName}" as ABSENT?`)) return;
+
+    const absentStatus = {};
+    allPeople.forEach((p) => { absentStatus[p.key] = false; });
+
+    setConfirming(true);
+    try {
+      const isOverride = team.attendanceLocked && isAdmin;
+      const attendanceRecord = {
+        presentCount: 0,
+        absentCount: totalMembers,
+        attendanceStatus: 'ABSENT',
+        memberAttendance: { ...absentStatus },
+        checkedInBy: user.uid,
+        checkedInByName: isOverride ? `${userData.name} (Override)` : userData.name,
+        checkedInAt: new Date(),
+        attendanceRound: settings?.currentSession || 'Default',
+      };
+
+      await updateDoc(doc(db, 'teams', team.id), {
+        presentCount: 0,
+        absentCount: totalMembers,
+        attendanceStatus: 'ABSENT',
+        memberAttendance: { ...absentStatus },
+        checkedIn: true,
+        checkedInBy: user.uid,
+        checkedInByName: isOverride ? `${userData.name} (Override)` : userData.name,
+        checkedInAt: serverTimestamp(),
+        attendanceRound: settings?.currentSession || 'Default',
+        attendanceLocked: true,
+        attendanceRecords: arrayUnion(attendanceRecord),
+        lastModified: serverTimestamp(),
+      });
+
+      setMemberStatus(absentStatus);
+      toast.success(`❌ Team marked ABSENT (0/${totalMembers})`);
+      onSuccess?.();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to mark absent');
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   const handleConfirm = async () => {
     if (!settings?.attendanceEnabled && !isAdmin) {
@@ -154,7 +209,7 @@ export default function MemberAttendanceForm({ team, onSuccess, onUnlock }) {
           </span>
         </p>
         {!isDisabled && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => toggleAll(true)}
               className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition font-medium"
@@ -163,9 +218,16 @@ export default function MemberAttendanceForm({ team, onSuccess, onUnlock }) {
             </button>
             <button
               onClick={() => toggleAll(false)}
-              className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition font-medium"
+              className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition font-medium"
             >
               All Absent
+            </button>
+            <button
+              onClick={handleMarkAllAbsent}
+              disabled={confirming}
+              className="flex items-center gap-1 px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50"
+            >
+              <UserX size={12} /> Mark Team Absent
             </button>
           </div>
         )}
